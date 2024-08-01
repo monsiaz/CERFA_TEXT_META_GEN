@@ -105,7 +105,13 @@ This project automates the process of generating explanatory content for CERFA d
         - `filepath`: Path to the JSON file.
         - `entry`: Entry to append.
 
-3. `process_cerfa_documents(input_filepath, output_filepath, test_mode)`
+3. `generate_html_structure(title)`
+    - Generates different HTML structures for variety.
+    - **Parameters:**
+        - `title`: Title of the CERFA document.
+    - **Returns:** Selected HTML structure as a string.
+
+4. `process_cerfa_documents(input_filepath, output_filepath, test_mode)`
     - Processes CERFA documents and generates content and meta descriptions.
     - **Parameters:**
         - `input_filepath`: Path to the input JSON file with filtered URLs.
@@ -126,7 +132,7 @@ The generated JSON file `generated_text_meta.json` contains the URL, title, meta
 ## Configuration
 - Ensure you have your OpenAI API key stored in `api_key.txt`.
 - Modify the `input_filepath` and `output_filepath` in `process_cerfa_documents.py` as needed.
-- You can adjust the prompts in `generate_text` function to customize the generated content.
+- You can adjust the prompts in the `generate_text` function to customize the generated content.
 
 ## Contributing
 Contributions are welcome! Please fork the repository and submit a pull request.
