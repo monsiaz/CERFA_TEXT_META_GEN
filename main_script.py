@@ -1,7 +1,7 @@
 import os
 import json
-from openai import OpenAI
 import random
+from openai import OpenAI
 
 # Define the file path for the API key
 api_key_filepath = 'api_key.txt'
@@ -21,13 +21,19 @@ print(f"API Key found: {api_key}")
 # Configure the OpenAI client
 client = OpenAI(api_key=api_key)
 
-def generate_text(prompt):
+# Pricing information
+pricing = {
+    "gpt-4-turbo": {"input": 0.01 / 1000, "output": 0.03 / 1000},
+    "gpt-4o": {"input": 0.005 / 1000, "output": 0.015 / 1000}
+}
+
+def generate_text(prompt, model):
     try:
         # Create a chat completion with the specified prompt
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=model,
             messages=[
-                {"role": "system", "content": "Tu es un expert des démarches administratives et des CERFA pour le site https://www.startdoc.fr/. Par ailleurs, tu prendras un soin particulier à avoir des formulations et un style humain (pas un des formulations IA standar)"},
+                {"role": "system", "content": "Tu es un expert des démarches administratives et des CERFA pour le site https://www.startdoc.fr/. Par ailleurs, tu prendras un soin particulier à avoir des formulations et un style humain (pas un des formulations IA standard)"},
                 {"role": "user", "content": prompt}
             ],
             max_tokens=4000,  # Adjust as needed
@@ -36,10 +42,11 @@ def generate_text(prompt):
         text = response.choices[0].message.content
         text = text.replace('\n', '').replace('\\n', '')  # Remove \n and \\n
         text = text.replace('| Startdoc', '')  # Remove "| Startdoc"
-        return text
+        tokens_used = response.usage.total_tokens if hasattr(response.usage, 'total_tokens') else 0
+        return text, tokens_used
     except Exception as e:
         print(f"Error generating text: {e}")
-        return ""
+        return "", 0
 
 def append_to_json_file(filepath, entry):
     try:
@@ -151,10 +158,22 @@ def process_cerfa_documents(input_filepath, output_filepath, test_mode=False):
 
     print(f"Processing {len(urls_to_process)} entries...")
 
+    total_cost_estimate = 0
+    count_gpt_4_turbo = 0
+    count_gpt_4o = 0
+
     for entry in urls_to_process:
         url = entry['url']
         title = entry['title']
         
+        # Randomly choose between gpt-4-turbo and gpt-4o
+        model = random.choice(["gpt-4-turbo", "gpt-4o"])
+        
+        if model == "gpt-4-turbo":
+            count_gpt_4_turbo += 1
+        else:
+            count_gpt_4o += 1
+
         # Generate the explanatory text of 1500 words
         html_structure = generate_html_structure(title)
         prompt = (
@@ -165,8 +184,8 @@ def process_cerfa_documents(input_filepath, output_filepath, test_mode=False):
             "Voici un modèle générique à adapter : "
             f"{html_structure}"
         )
-        print(f"Generating text for {title}...")
-        generated_text = generate_text(prompt)
+        print(f"Generating text for {title} using {model}...")
+        generated_text, tokens_used = generate_text(prompt, model)
         if not generated_text:
             print(f"Failed to generate text for {title}. Skipping.")
             continue
@@ -174,7 +193,7 @@ def process_cerfa_documents(input_filepath, output_filepath, test_mode=False):
         # Generate the SEO optimized meta description
         prompt_meta = f"Génère une méta description optimisée pour le SEO (moins de 130 caractères) pour le CERFA intitulé '{title}'."
         print(f"Generating meta description for {title}...")
-        meta_description = generate_text(prompt_meta)
+        meta_description, tokens_used_meta = generate_text(prompt_meta, model)
         if not meta_description:
             print(f"Failed to generate meta description for {title}. Skipping.")
             continue
@@ -184,7 +203,8 @@ def process_cerfa_documents(input_filepath, output_filepath, test_mode=False):
             'url': url,
             'title': title,
             'meta_description': meta_description,
-            'generated_text': generated_text
+            'generated_text': generated_text,
+            'model': model
         }
         print(f"Generated text and meta description for {title}.")
 
@@ -195,7 +215,20 @@ def process_cerfa_documents(input_filepath, output_filepath, test_mode=False):
             print(f"Failed to append result for {title}. Stopping the script.")
             break
 
-    print("Process completed.")
+    # Estimate total cost based on the assumption that 50% of the URLs will use each model
+    num_urls = len(urls_to_process)
+    total_input_tokens = num_urls * 1000  # Assuming average input tokens per request
+    total_output_tokens = num_urls * 3000  # Assuming average output tokens per request
+
+    estimated_cost_gpt_4_turbo = (total_input_tokens * pricing["gpt-4-turbo"]["input"] + 
+                                  total_output_tokens * pricing["gpt-4-turbo"]["output"]) * (num_urls / 2)
+
+    estimated_cost_gpt_4o = (total_input_tokens * pricing["gpt-4o"]["input"] + 
+                             total_output_tokens * pricing["gpt-4o"]["output"]) * (num_urls / 2)
+
+    total_cost_estimate = estimated_cost_gpt_4_turbo + estimated_cost_gpt_4o
+
+    print(f"Process completed. Total estimated cost: ${total_cost_estimate:.2f}")
 
 # Usage of the script
 input_filepath = '/Users/simonazoulay/CERFA_TEXT_GEN/filtered_urls.json'
